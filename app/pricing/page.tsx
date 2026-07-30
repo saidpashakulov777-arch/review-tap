@@ -22,7 +22,7 @@ const plans: PricingPlan[] = [
     name: "Starter",
     key: "starter",
     description: "Для небольших кафе, ресторанов и локальных заведений.",
-    price: "199 000",
+    price: "99 000",
     period: "сум / месяц",
     buttonLabel: "Выбрать Starter",
     features: [
@@ -38,7 +38,7 @@ const plans: PricingPlan[] = [
     name: "Pro",
     key: "pro",
     description: "Для развивающихся ресторанов и сетей с несколькими филиалами.",
-    price: "399 000",
+    price: "199 000",
     period: "сум / месяц",
     highlighted: true,
     buttonLabel: "Выбрать Pro",
@@ -56,8 +56,9 @@ const plans: PricingPlan[] = [
     name: "Business",
     key: "business",
     description: "Для крупных ресторанных сетей, гостиниц и корпоративных клиентов.",
-    price: "По запросу",
-    buttonLabel: "Связаться с нами",
+    price: "399 000",
+period: "сум / месяц",
+buttonLabel: "Выбрать Business",
     features: [
       "Неограниченное количество ресторанов",
       "Неограниченное количество филиалов",
@@ -76,15 +77,9 @@ export default function PricingPage() {
   const [selectedPlan, setSelectedPlan] = useState<PlanName | null>(null);
 
   function handlePlanSelect(plan: PlanName) {
-    setSelectedPlan(plan);
-
-    if (plan === "business") {
-      router.push("/contact?plan=business");
-      return;
-    }
-
-    router.push(`/checkout?plan=${plan}`);
-  }
+  setSelectedPlan(plan);
+  router.push(`/checkout?plan=${plan}`);
+}
 
   return (
     <main className="min-h-screen bg-[#070b14] text-white">

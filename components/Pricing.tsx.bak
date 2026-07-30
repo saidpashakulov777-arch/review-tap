@@ -2,7 +2,7 @@ const plans = [
   {
     name: "Starter",
     description: "Для небольших кафе и одной точки",
-    price: "99 000",
+    price: "199 000",
     period: "сум / месяц",
     features: [
       "1 ресторан",
@@ -18,7 +18,7 @@ const plans = [
   {
     name: "Business",
     description: "Для ресторанов с несколькими филиалами",
-    price: "199 000",
+    price: "399 000",
     period: "сум / месяц",
     features: [
       "1 ресторан",
@@ -35,8 +35,8 @@ const plans = [
   {
     name: "Enterprise",
     description: "Для ресторанных сетей и крупных компаний",
-    price: "399 000",
-    period: "сум / месяц",
+    price: "Индивидуально",
+    period: "по запросу",
     features: [
       "Неограниченные филиалы",
       "Неограниченные NFC-стенды",
@@ -45,7 +45,7 @@ const plans = [
       "Помощь с подключением",
       "Персональная поддержка",
     ],
-    button: "Выбрать Business",
+    button: "Связаться",
     popular: false,
   },
 ];

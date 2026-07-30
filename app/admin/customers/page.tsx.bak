@@ -101,8 +101,8 @@ const planPrices: Record<
   SubscriptionPlan,
   number
 > = {
-  starter: 99000,
-  pro: 199000,
+  starter: 199000,
+  pro: 399000,
   business: 0,
 };
 
@@ -143,7 +143,7 @@ export default function AdminCustomersPage() {
     useState(30);
 
   const [amountUzs, setAmountUzs] =
-    useState(99000);
+    useState(199000);
 
   const [note, setNote] =
     useState("");
