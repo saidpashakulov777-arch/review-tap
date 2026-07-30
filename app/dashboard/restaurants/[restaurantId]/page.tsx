@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import {
   FormEvent,
   useEffect,
   useState,
 } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import {
+  useParams,
+  useRouter,
+} from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
 
@@ -14,13 +17,21 @@ type Restaurant = {
   id: string;
   name: string;
   createdAt: string | null;
-  branchCount: number;
 };
 
-type RestaurantsResponse = {
+type Branch = {
+  id: string;
+  restaurantId: string | null;
+  name: string;
+  address: string;
+  createdAt: string | null;
+};
+
+type BranchesResponse = {
   success: boolean;
-  restaurants?: Restaurant[];
   restaurant?: Restaurant;
+  branches?: Branch[];
+  branch?: Branch;
   message?: string;
 };
 
@@ -31,15 +42,30 @@ type MessageState =
     }
   | null;
 
-export default function RestaurantsPage() {
+export default function RestaurantBranchesPage() {
   const router = useRouter();
 
+  const params = useParams<{
+    restaurantId: string;
+  }>();
+
+  const restaurantId =
+    params.restaurantId;
+
   const [
-    restaurants,
-    setRestaurants,
-  ] = useState<Restaurant[]>([]);
+    restaurant,
+    setRestaurant,
+  ] = useState<Restaurant | null>(
+    null,
+  );
+
+  const [branches, setBranches] =
+    useState<Branch[]>([]);
 
   const [name, setName] =
+    useState("");
+
+  const [address, setAddress] =
     useState("");
 
   const [loading, setLoading] =
@@ -52,8 +78,10 @@ export default function RestaurantsPage() {
     useState<MessageState>(null);
 
   useEffect(() => {
-    void loadRestaurants();
-  }, []);
+    if (restaurantId) {
+      void loadBranches();
+    }
+  }, [restaurantId]);
 
   async function getAccessToken() {
     const {
@@ -68,7 +96,7 @@ export default function RestaurantsPage() {
     ) {
       router.replace(
         `/login?next=${encodeURIComponent(
-          "/dashboard/restaurants",
+          `/dashboard/restaurants/${restaurantId}`,
         )}`,
       );
 
@@ -78,7 +106,7 @@ export default function RestaurantsPage() {
     return session.access_token;
   }
 
-  async function loadRestaurants() {
+  async function loadBranches() {
     setLoading(true);
     setMessage(null);
 
@@ -91,7 +119,7 @@ export default function RestaurantsPage() {
       }
 
       const response = await fetch(
-        "/api/restaurants",
+        `/api/restaurants/${restaurantId}/branches`,
         {
           method: "GET",
 
@@ -105,12 +133,12 @@ export default function RestaurantsPage() {
       );
 
       const result =
-        (await response.json()) as RestaurantsResponse;
+        (await response.json()) as BranchesResponse;
 
       if (response.status === 401) {
         router.replace(
           `/login?next=${encodeURIComponent(
-            "/dashboard/restaurants",
+            `/dashboard/restaurants/${restaurantId}`,
           )}`,
         );
 
@@ -119,16 +147,21 @@ export default function RestaurantsPage() {
 
       if (
         !response.ok ||
-        !result.success
+        !result.success ||
+        !result.restaurant
       ) {
         throw new Error(
           result.message ||
-            "Не удалось загрузить рестораны.",
+            "Не удалось загрузить филиалы.",
         );
       }
 
-      setRestaurants(
-        result.restaurants ?? [],
+      setRestaurant(
+        result.restaurant,
+      );
+
+      setBranches(
+        result.branches ?? [],
       );
     } catch (error) {
       setMessage({
@@ -137,14 +170,14 @@ export default function RestaurantsPage() {
         text:
           error instanceof Error
             ? error.message
-            : "Не удалось загрузить рестораны.",
+            : "Не удалось загрузить филиалы.",
       });
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleCreateRestaurant(
+  async function handleCreateBranch(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
@@ -154,10 +187,13 @@ export default function RestaurantsPage() {
     const cleanName =
       name.trim();
 
+    const cleanAddress =
+      address.trim();
+
     if (!cleanName) {
       setMessage({
         type: "error",
-        text: "Введите название ресторана.",
+        text: "Введите название филиала.",
       });
 
       return;
@@ -174,7 +210,7 @@ export default function RestaurantsPage() {
       }
 
       const response = await fetch(
-        "/api/restaurants",
+        `/api/restaurants/${restaurantId}/branches`,
         {
           method: "POST",
 
@@ -188,6 +224,7 @@ export default function RestaurantsPage() {
 
           body: JSON.stringify({
             name: cleanName,
+            address: cleanAddress,
           }),
 
           cache: "no-store",
@@ -195,41 +232,32 @@ export default function RestaurantsPage() {
       );
 
       const result =
-        (await response.json()) as RestaurantsResponse;
-
-      if (response.status === 401) {
-        router.replace(
-          `/login?next=${encodeURIComponent(
-            "/dashboard/restaurants",
-          )}`,
-        );
-
-        return;
-      }
+        (await response.json()) as BranchesResponse;
 
       if (
         !response.ok ||
         !result.success ||
-        !result.restaurant
+        !result.branch
       ) {
         throw new Error(
           result.message ||
-            "Не удалось создать ресторан.",
+            "Не удалось создать филиал.",
         );
       }
 
-      setRestaurants(
-        (currentRestaurants) => [
-          result.restaurant as Restaurant,
-          ...currentRestaurants,
+      setBranches(
+        (currentBranches) => [
+          result.branch as Branch,
+          ...currentBranches,
         ],
       );
 
       setName("");
+      setAddress("");
 
       setMessage({
         type: "success",
-        text: "Ресторан успешно создан.",
+        text: "Филиал успешно создан.",
       });
     } catch (error) {
       setMessage({
@@ -238,7 +266,7 @@ export default function RestaurantsPage() {
         text:
           error instanceof Error
             ? error.message
-            : "Не удалось создать ресторан.",
+            : "Не удалось создать филиал.",
       });
     } finally {
       setCreating(false);
@@ -251,29 +279,31 @@ export default function RestaurantsPage() {
         <header className="flex flex-col gap-5 border-b border-white/10 pb-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Link
-              href="/dashboard"
+              href="/dashboard/restaurants"
               className="text-sm font-semibold text-blue-400 transition hover:text-blue-300"
             >
-              ← Вернуться в кабинет
+              ← Мои рестораны
             </Link>
 
             <h1 className="mt-4 text-3xl font-black sm:text-4xl">
-              Мои рестораны
+              {restaurant?.name ??
+                "Филиалы ресторана"}
             </h1>
 
             <p className="mt-3 text-sm leading-7 text-gray-400">
-              Создавайте рестораны и
-              управляйте их филиалами.
+              Создавайте филиалы и
+              управляйте точками этого
+              ресторана.
             </p>
           </div>
 
           <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-5 py-3">
             <p className="text-xs uppercase tracking-wider text-blue-300">
-              Всего ресторанов
+              Всего филиалов
             </p>
 
             <p className="mt-1 text-2xl font-black">
-              {restaurants.length}
+              {branches.length}
             </p>
           </div>
         </header>
@@ -302,20 +332,19 @@ export default function RestaurantsPage() {
 
         <section className="mt-8 rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
           <h2 className="text-xl font-bold">
-            Добавить ресторан
+            Добавить филиал
           </h2>
 
           <p className="mt-2 text-sm text-gray-500">
-            Введите название заведения.
-            После этого добавим филиалы и
-            NFC-метки.
+            Укажите название точки и
+            её адрес.
           </p>
 
           <form
             onSubmit={
-              handleCreateRestaurant
+              handleCreateBranch
             }
-            className="mt-5 flex flex-col gap-3 sm:flex-row"
+            className="mt-5 grid gap-3 lg:grid-cols-[1fr_1.4fr_auto]"
           >
             <input
               type="text"
@@ -325,10 +354,24 @@ export default function RestaurantsPage() {
                   event.target.value,
                 )
               }
-              placeholder="Например: Urban Coffee"
+              placeholder="Например: Главный филиал"
               maxLength={120}
               disabled={creating}
-              className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-blue-500 disabled:opacity-60"
+              className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-blue-500 disabled:opacity-60"
+            />
+
+            <input
+              type="text"
+              value={address}
+              onChange={(event) =>
+                setAddress(
+                  event.target.value,
+                )
+              }
+              placeholder="Например: Ташкент, ул. Амира Темура, 10"
+              maxLength={250}
+              disabled={creating}
+              className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-blue-500 disabled:opacity-60"
             />
 
             <button
@@ -338,24 +381,22 @@ export default function RestaurantsPage() {
             >
               {creating
                 ? "Создаём..."
-                : "Добавить ресторан"}
+                : "Добавить филиал"}
             </button>
           </form>
         </section>
 
         {loading ? (
           <LoadingState />
-        ) : restaurants.length === 0 ? (
+        ) : branches.length === 0 ? (
           <EmptyState />
         ) : (
           <section className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {restaurants.map(
-              (restaurant) => (
-                <RestaurantCard
-                  key={restaurant.id}
-                  restaurant={
-                    restaurant
-                  }
+            {branches.map(
+              (branch) => (
+                <BranchCard
+                  key={branch.id}
+                  branch={branch}
                 />
               ),
             )}
@@ -366,18 +407,16 @@ export default function RestaurantsPage() {
   );
 }
 
-function RestaurantCard({
-  restaurant,
+function BranchCard({
+  branch,
 }: {
-  restaurant: Restaurant;
+  branch: Branch;
 }) {
   return (
     <article className="rounded-[26px] border border-white/10 bg-white/[0.03] p-6 transition hover:-translate-y-1 hover:border-blue-500/30">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600/15 text-xl font-black text-blue-300">
-          {restaurant.name
-            .charAt(0)
-            .toUpperCase()}
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-600/15 text-xl">
+          📍
         </div>
 
         <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
@@ -385,33 +424,29 @@ function RestaurantCard({
         </span>
       </div>
 
-      <h2 className="mt-5 truncate text-xl font-bold">
-        {restaurant.name}
+      <h2 className="mt-5 text-xl font-bold">
+        {branch.name}
       </h2>
 
-      <p className="mt-2 text-sm text-gray-500">
+      <p className="mt-3 min-h-12 text-sm leading-6 text-gray-500">
+        {branch.address ||
+          "Адрес не указан"}
+      </p>
+
+      <p className="mt-4 text-xs text-gray-600">
         Создан:{" "}
         {formatDate(
-          restaurant.createdAt,
+          branch.createdAt,
         )}
       </p>
 
-      <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-        <p className="text-xs uppercase tracking-wider text-gray-600">
-          Филиалы
-        </p>
-
-        <p className="mt-1 text-2xl font-black">
-          {restaurant.branchCount}
-        </p>
-      </div>
-
-      <Link
-        href={`/dashboard/restaurants/${restaurant.id}`}
-        className="mt-5 flex w-full items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+      <button
+        type="button"
+        disabled
+        className="mt-5 w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-gray-500"
       >
-        Управлять филиалами
-      </Link>
+        NFC-метки — следующий шаг
+      </button>
     </article>
   );
 }
@@ -432,16 +467,16 @@ function LoadingState() {
 function EmptyState() {
   return (
     <section className="mt-8 rounded-[28px] border border-dashed border-white/10 bg-white/[0.02] px-6 py-16 text-center">
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-3xl">
-        🏢
+      <div className="text-4xl">
+        📍
       </div>
 
       <h2 className="mt-5 text-xl font-bold">
-        Ресторанов пока нет
+        Филиалов пока нет
       </h2>
 
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500">
-        Добавьте первый ресторан с
+      <p className="mt-2 text-sm text-gray-500">
+        Добавьте первый филиал с
         помощью формы выше.
       </p>
     </section>
