@@ -8,442 +8,131 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type AdminRole =
-  | "owner"
-  | "admin"
-  | "support";
-
-type AdminUserRow = {
-  user_id: string;
-  role: AdminRole;
-  is_active: boolean;
+type RestaurantRow = {
+  id: string;
+  owner_id: string | null;
+  name: string;
+  created_at: string | null;
 };
 
-type JsonRecord = Record<string, unknown>;
+type BranchRow = {
+  id: string;
+  restaurant_id: string | null;
+};
+
+type CreateRestaurantBody = {
+  name?: unknown;
+};
 
 export async function GET(
   request: NextRequest,
 ) {
-  const adminAccess =
-    await authorizeAdmin(request);
+  const auth = await requireUser(request);
 
-  if (!adminAccess.success) {
-    return adminAccess.response;
+  if (!auth.success) {
+    return auth.response;
   }
 
   try {
-    const [
-      usersResult,
-      restaurantsResult,
-      branchesResult,
-      nfcTagsResult,
-      profilesResult,
-      subscriptionsResult,
-    ] = await Promise.all([
-      supabaseAdmin.auth.admin.listUsers({
-        page: 1,
-        perPage: 1000,
-      }),
+    const {
+      data: restaurantData,
+      error: restaurantError,
+    } = await supabaseAdmin
+      .from("restaurants")
+      .select(
+        "id, owner_id, name, created_at",
+      )
+      .eq("owner_id", auth.userId)
+      .order("created_at", {
+        ascending: false,
+      });
 
-      supabaseAdmin
-        .from("restaurants")
-        .select("*"),
-
-      supabaseAdmin
-        .from("branches")
-        .select("*"),
-
-      supabaseAdmin
-        .from("nfc_tags")
-        .select("*"),
-
-      supabaseAdmin
-        .from("profiles")
-        .select("*"),
-
-      supabaseAdmin
-        .from("subscriptions")
-        .select("*"),
-    ]);
-
-    if (usersResult.error) {
-      return createErrorResponse(
-        "USERS_LOAD_FAILED",
-        "Не удалось загрузить пользователей.",
+    if (restaurantError) {
+      return errorResponse(
+        `Не удалось загрузить рестораны: ${restaurantError.message}`,
         500,
       );
     }
-
-    if (restaurantsResult.error) {
-      return createErrorResponse(
-        "RESTAURANTS_LOAD_FAILED",
-        `Не удалось загрузить рестораны: ${restaurantsResult.error.message}`,
-        500,
-      );
-    }
-
-    if (branchesResult.error) {
-      return createErrorResponse(
-        "BRANCHES_LOAD_FAILED",
-        `Не удалось загрузить филиалы: ${branchesResult.error.message}`,
-        500,
-      );
-    }
-
-    if (nfcTagsResult.error) {
-      return createErrorResponse(
-        "NFC_TAGS_LOAD_FAILED",
-        `Не удалось загрузить NFC-метки: ${nfcTagsResult.error.message}`,
-        500,
-      );
-    }
-
-    if (profilesResult.error) {
-      return createErrorResponse(
-        "PROFILES_LOAD_FAILED",
-        `Не удалось загрузить профили: ${profilesResult.error.message}`,
-        500,
-      );
-    }
-
-    if (subscriptionsResult.error) {
-      return createErrorResponse(
-        "SUBSCRIPTIONS_LOAD_FAILED",
-        `Не удалось загрузить подписки: ${subscriptionsResult.error.message}`,
-        500,
-      );
-    }
-
-    const authUsers =
-      usersResult.data.users ?? [];
 
     const restaurants =
-      toRecordArray(
-        restaurantsResult.data,
+      (restaurantData ??
+        []) as RestaurantRow[];
+
+    const restaurantIds =
+      restaurants.map(
+        (restaurant) => restaurant.id,
       );
-
-    const branches =
-      toRecordArray(branchesResult.data);
-
-    const nfcTags =
-      toRecordArray(nfcTagsResult.data);
-
-    const profiles =
-      toRecordArray(profilesResult.data);
-
-    const subscriptions =
-      toRecordArray(
-        subscriptionsResult.data,
-      );
-
-    const emailByUserId =
-      new Map<string, string>();
-
-    for (const user of authUsers) {
-      emailByUserId.set(
-        user.id,
-        user.email ?? "",
-      );
-    }
-
-    const profileByUserId =
-      new Map<string, JsonRecord>();
-
-    for (const profile of profiles) {
-      const profileId = getString(
-        profile,
-        ["id"],
-      );
-
-      if (profileId) {
-        profileByUserId.set(
-          profileId,
-          profile,
-        );
-      }
-    }
-
-    const latestSubscriptionByOwner =
-      new Map<string, JsonRecord>();
-
-    const sortedSubscriptions = [
-      ...subscriptions,
-    ].sort(
-      (first, second) =>
-        getTimestamp(second, [
-          "updated_at",
-          "created_at",
-        ]) -
-        getTimestamp(first, [
-          "updated_at",
-          "created_at",
-        ]),
-    );
-
-    for (
-      const subscription of
-      sortedSubscriptions
-    ) {
-      const ownerId = getString(
-        subscription,
-        ["owner_id", "user_id"],
-      );
-
-      if (
-        ownerId &&
-        !latestSubscriptionByOwner.has(
-          ownerId,
-        )
-      ) {
-        latestSubscriptionByOwner.set(
-          ownerId,
-          subscription,
-        );
-      }
-    }
 
     const branchCountByRestaurant =
       new Map<string, number>();
 
-    const restaurantIdByBranch =
-      new Map<string, string>();
-
-    for (const branch of branches) {
-      const branchId = getString(
-        branch,
-        ["id"],
-      );
-
-      const restaurantId = getString(
-        branch,
-        ["restaurant_id"],
-      );
-
-      if (!restaurantId) {
-        continue;
-      }
-
-      branchCountByRestaurant.set(
-        restaurantId,
-        (branchCountByRestaurant.get(
-          restaurantId,
-        ) ?? 0) + 1,
-      );
-
-      if (branchId) {
-        restaurantIdByBranch.set(
-          branchId,
-          restaurantId,
-        );
-      }
-    }
-
-    const nfcCountByRestaurant =
-      new Map<string, number>();
-
-    for (const tag of nfcTags) {
-      const branchId = getString(
-        tag,
-        ["branch_id"],
-      );
-
-      if (!branchId) {
-        continue;
-      }
-
-      const restaurantId =
-        restaurantIdByBranch.get(
-          branchId,
+    if (restaurantIds.length > 0) {
+      const {
+        data: branchData,
+        error: branchError,
+      } = await supabaseAdmin
+        .from("branches")
+        .select("id, restaurant_id")
+        .in(
+          "restaurant_id",
+          restaurantIds,
         );
 
-      if (!restaurantId) {
-        continue;
+      if (branchError) {
+        return errorResponse(
+          `Не удалось загрузить филиалы: ${branchError.message}`,
+          500,
+        );
       }
 
-      nfcCountByRestaurant.set(
-        restaurantId,
-        (nfcCountByRestaurant.get(
-          restaurantId,
-        ) ?? 0) + 1,
-      );
+      const branches =
+        (branchData ?? []) as BranchRow[];
+
+      for (const branch of branches) {
+        if (!branch.restaurant_id) {
+          continue;
+        }
+
+        branchCountByRestaurant.set(
+          branch.restaurant_id,
+          (
+            branchCountByRestaurant.get(
+              branch.restaurant_id,
+            ) ?? 0
+          ) + 1,
+        );
+      }
     }
 
     const normalizedRestaurants =
-      restaurants
-        .map((restaurant) => {
-          const restaurantId =
-            getString(restaurant, [
-              "id",
-            ]);
-
-          const ownerId = getString(
-            restaurant,
-            [
-              "owner_id",
-              "user_id",
-              "profile_id",
-            ],
-          );
-
-          if (!restaurantId) {
-            return null;
-          }
-
-          const profile = ownerId
-            ? profileByUserId.get(
-                ownerId,
-              ) ?? null
-            : null;
-
-          const subscription = ownerId
-            ? latestSubscriptionByOwner.get(
-                ownerId,
-              ) ?? null
-            : null;
-
-          return {
-            id: restaurantId,
-
-            name:
-              getString(restaurant, [
-                "name",
-                "restaurant_name",
-                "title",
-              ]) || "Без названия",
-
-            ownerId: ownerId ?? "",
-
-            ownerEmail: ownerId
-              ? emailByUserId.get(
-                  ownerId,
-                ) ?? ""
-              : "",
-
-            ownerName: profile
-              ? getString(profile, [
-                  "full_name",
-                  "name",
-                ])
-              : "",
-
-            companyName: profile
-              ? getString(profile, [
-                  "company_name",
-                ])
-              : "",
-
-            googleReviewUrl:
-              getString(restaurant, [
-                "google_review_url",
-                "google_maps_url",
-                "review_url",
-              ]),
-
-            createdAt:
-              getString(restaurant, [
-                "created_at",
-              ]),
-
-            updatedAt:
-              getString(restaurant, [
-                "updated_at",
-              ]),
-
-            branchCount:
-              branchCountByRestaurant.get(
-                restaurantId,
-              ) ?? 0,
-
-            nfcTagCount:
-              nfcCountByRestaurant.get(
-                restaurantId,
-              ) ?? 0,
-
-            subscription: subscription
-              ? {
-                  id: getString(
-                    subscription,
-                    ["id"],
-                  ),
-
-                  plan:
-                    getString(
-                      subscription,
-                      ["plan"],
-                    ) || "trial",
-
-                  status:
-                    getString(
-                      subscription,
-                      ["status"],
-                    ) || "inactive",
-
-                  currentPeriodEnd:
-                    getString(
-                      subscription,
-                      [
-                        "current_period_end",
-                      ],
-                    ),
-
-                  trialEndsAt:
-                    getString(
-                      subscription,
-                      ["trial_ends_at"],
-                    ),
-
-                  paymentProvider:
-                    getString(
-                      subscription,
-                      [
-                        "payment_provider",
-                      ],
-                    ),
-                }
-              : null,
-          };
-        })
-        .filter(
-          (
-            restaurant,
-          ): restaurant is NonNullable<
-            typeof restaurant
-          > => restaurant !== null,
-        )
-        .sort(
-          (first, second) =>
-            dateToTimestamp(
-              second.createdAt,
-            ) -
-            dateToTimestamp(
-              first.createdAt,
-            ),
-        );
+      restaurants.map(
+        (restaurant) => ({
+          id: restaurant.id,
+          name: restaurant.name,
+          createdAt:
+            restaurant.created_at,
+          branchCount:
+            branchCountByRestaurant.get(
+              restaurant.id,
+            ) ?? 0,
+        }),
+      );
 
     return NextResponse.json(
       {
         success: true,
-
-        admin: {
-          userId:
-            adminAccess.userId,
-          role: adminAccess.role,
-        },
-
         restaurants:
           normalizedRestaurants,
       },
       {
         status: 200,
-
         headers: {
           "Cache-Control": "no-store",
         },
       },
     );
   } catch (error) {
-    return createErrorResponse(
-      "INTERNAL_SERVER_ERROR",
+    return errorResponse(
       getErrorMessage(
         error,
         "Не удалось загрузить рестораны.",
@@ -453,120 +142,159 @@ export async function GET(
   }
 }
 
-async function authorizeAdmin(
+export async function POST(
+  request: NextRequest,
+) {
+  const auth = await requireUser(request);
+
+  if (!auth.success) {
+    return auth.response;
+  }
+
+  try {
+    const body =
+      (await request.json()) as CreateRestaurantBody;
+
+    const name =
+      typeof body.name === "string"
+        ? body.name.trim()
+        : "";
+
+    if (!name) {
+      return errorResponse(
+        "Введите название ресторана.",
+        400,
+      );
+    }
+
+    if (name.length > 120) {
+      return errorResponse(
+        "Название ресторана слишком длинное.",
+        400,
+      );
+    }
+
+    const {
+      data,
+      error,
+    } = await supabaseAdmin
+      .from("restaurants")
+      .insert({
+        owner_id: auth.userId,
+        name,
+      })
+      .select(
+        "id, owner_id, name, created_at",
+      )
+      .single();
+
+    if (error) {
+      return errorResponse(
+        `Не удалось создать ресторан: ${error.message}`,
+        500,
+      );
+    }
+
+    const restaurant =
+      data as RestaurantRow;
+
+    return NextResponse.json(
+      {
+        success: true,
+
+        restaurant: {
+          id: restaurant.id,
+          name: restaurant.name,
+          createdAt:
+            restaurant.created_at,
+          branchCount: 0,
+        },
+      },
+      {
+        status: 201,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    return errorResponse(
+      getErrorMessage(
+        error,
+        "Не удалось создать ресторан.",
+      ),
+      500,
+    );
+  }
+}
+
+async function requireUser(
   request: NextRequest,
 ): Promise<
   | {
       success: true;
       userId: string;
-      role: AdminRole;
+      email: string;
     }
   | {
       success: false;
       response: NextResponse;
     }
 > {
-  const token = getBearerToken(
+  const authorization =
     request.headers.get(
       "authorization",
-    ),
-  );
+    );
+
+  const token =
+    getBearerToken(authorization);
 
   if (!token) {
     return {
       success: false,
 
-      response: createErrorResponse(
-        "AUTHORIZATION_REQUIRED",
-        "Войдите в аккаунт.",
+      response: errorResponse(
+        "Необходимо войти в аккаунт.",
         401,
       ),
     };
   }
 
   const {
-    data: userData,
-    error: userError,
-  } = await supabaseAdmin.auth.getUser(
-    token,
-  );
+    data,
+    error,
+  } =
+    await supabaseAdmin.auth.getUser(
+      token,
+    );
 
-  if (
-    userError ||
-    !userData.user
-  ) {
+  if (error || !data.user) {
     return {
       success: false,
 
-      response: createErrorResponse(
-        "INVALID_SESSION",
+      response: errorResponse(
         "Сессия истекла. Войдите снова.",
         401,
       ),
     };
   }
 
-  const {
-    data: adminData,
-    error: adminError,
-  } = await supabaseAdmin
-    .from("admin_users")
-    .select("*")
-    .eq(
-      "user_id",
-      userData.user.id,
-    )
-    .maybeSingle();
-
-  if (
-    adminError ||
-    !adminData
-  ) {
-    return {
-      success: false,
-
-      response: createErrorResponse(
-        "ADMIN_ACCESS_DENIED",
-        "У вас нет доступа к админ-панели.",
-        403,
-      ),
-    };
-  }
-
-  const admin =
-    adminData as unknown as AdminUserRow;
-
-  if (
-    !admin.is_active ||
-    !isAdminRole(admin.role)
-  ) {
-    return {
-      success: false,
-
-      response: createErrorResponse(
-        "ADMIN_ACCESS_DISABLED",
-        "Доступ администратора отключён.",
-        403,
-      ),
-    };
-  }
-
   return {
     success: true,
-    userId: userData.user.id,
-    role: admin.role,
+    userId: data.user.id,
+    email: data.user.email ?? "",
   };
 }
 
 function getBearerToken(
-  authorizationHeader: string | null,
+  authorization: string | null,
 ) {
-  if (!authorizationHeader) {
+  if (!authorization) {
     return null;
   }
 
   const [scheme, token] =
-    authorizationHeader
+    authorization
       .trim()
       .split(/\s+/);
 
@@ -581,87 +309,17 @@ function getBearerToken(
   return token;
 }
 
-function isAdminRole(
-  value: unknown,
-): value is AdminRole {
-  return (
-    value === "owner" ||
-    value === "admin" ||
-    value === "support"
-  );
-}
-
-function toRecordArray(
-  value: unknown,
-): JsonRecord[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter(
-    (item): item is JsonRecord =>
-      typeof item === "object" &&
-      item !== null &&
-      !Array.isArray(item),
-  );
-}
-
-function getString(
-  record: JsonRecord,
-  keys: string[],
-) {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (
-      typeof value === "string" &&
-      value.trim()
-    ) {
-      return value;
-    }
-  }
-
-  return "";
-}
-
-function getTimestamp(
-  record: JsonRecord,
-  keys: string[],
-) {
-  return dateToTimestamp(
-    getString(record, keys),
-  );
-}
-
-function dateToTimestamp(
-  value: string,
-) {
-  if (!value) {
-    return 0;
-  }
-
-  const timestamp =
-    new Date(value).getTime();
-
-  return Number.isFinite(timestamp)
-    ? timestamp
-    : 0;
-}
-
-function createErrorResponse(
-  code: string,
+function errorResponse(
   message: string,
   status: number,
 ) {
   return NextResponse.json(
     {
       success: false,
-      error: code,
       message,
     },
     {
       status,
-
       headers: {
         "Cache-Control": "no-store",
       },
