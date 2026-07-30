@@ -440,13 +440,12 @@ function BranchCard({
         )}
       </p>
 
-      <button
-        type="button"
-        disabled
-        className="mt-5 w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-gray-500"
+      <Link
+        href={`/dashboard/branches/${branch.id}`}
+        className="mt-5 flex w-full items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
       >
-        NFC-метки — следующий шаг
-      </button>
+        Настроить NFC-метки
+      </Link>
     </article>
   );
 }
