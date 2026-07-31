@@ -16,10 +16,6 @@ type RouteContext = {
   }>;
 };
 
-type CreateTagBody = {
-  googleReviewUrl?: unknown;
-};
-
 type BranchRow = {
   id: string;
   restaurant_id: string | null;
@@ -30,8 +26,8 @@ type BranchRow = {
 
 type RestaurantRow = {
   id: string;
-  owner_id: string | null;
   name: string;
+  owner_id: string | null;
 };
 
 type NfcTagRow = {
@@ -46,11 +42,15 @@ type TapEventRow = {
   nfc_tag_id: string;
 };
 
+type CreateTagBody = {
+  googleReviewUrl?: unknown;
+};
+
 export async function GET(
   request: NextRequest,
   context: RouteContext,
 ) {
-  const auth = await requireUser(request);
+  const auth = await requireAdmin(request);
 
   if (!auth.success) {
     return auth.response;
@@ -66,14 +66,11 @@ export async function GET(
   }
 
   try {
-    const ownership =
-      await getOwnedBranch(
-        branchId,
-        auth.userId,
-      );
+    const branchResult =
+      await getBranchDetails(branchId);
 
-    if (!ownership.success) {
-      return ownership.response;
+    if (!branchResult.success) {
+      return branchResult.response;
     }
 
     const {
@@ -99,12 +96,12 @@ export async function GET(
     const tags =
       (tagData ?? []) as NfcTagRow[];
 
+    const tapCountByTag =
+      new Map<string, number>();
+
     const tagIds = tags.map(
       (tag) => tag.id,
     );
-
-    const tapCountByTag =
-      new Map<string, number>();
 
     if (tagIds.length > 0) {
       const {
@@ -113,11 +110,12 @@ export async function GET(
       } = await supabaseAdmin
         .from("tap_events")
         .select("nfc_tag_id")
+        .eq("event_type", "tap")
         .in("nfc_tag_id", tagIds);
 
       if (eventError) {
         return errorResponse(
-          `Не удалось загрузить статистику: ${eventError.message}`,
+          `Не удалось загрузить переходы: ${eventError.message}`,
           500,
         );
       }
@@ -142,16 +140,16 @@ export async function GET(
         success: true,
 
         branch: {
-          id: ownership.branch.id,
-          restaurantId:
-            ownership.branch.restaurant_id,
-          restaurantName:
-            ownership.restaurant.name,
-          name: ownership.branch.name,
+          id: branchResult.branch.id,
+          name: branchResult.branch.name,
           address:
-            ownership.branch.address ?? "",
-          createdAt:
-            ownership.branch.created_at,
+            branchResult.branch.address ?? "",
+          restaurantId:
+            branchResult.restaurant.id,
+          restaurantName:
+            branchResult.restaurant.name,
+          ownerId:
+            branchResult.restaurant.owner_id,
         },
 
         tags: tags.map((tag) => ({
@@ -166,12 +164,7 @@ export async function GET(
             0,
         })),
       },
-      {
-        status: 200,
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      },
+      noStoreOptions(200),
     );
   } catch (error) {
     return errorResponse(
@@ -188,15 +181,143 @@ export async function POST(
   request: NextRequest,
   context: RouteContext,
 ) {
-  return errorResponse(
-    "Создание NFC-меток доступно только администратору ReviewTap.",
-    403,
-  );
+  const auth = await requireAdmin(request);
+
+  if (!auth.success) {
+    return auth.response;
+  }
+
+  const { branchId } = await context.params;
+
+  if (!branchId) {
+    return errorResponse(
+      "Не указан филиал.",
+      400,
+    );
+  }
+
+  try {
+    const branchResult =
+      await getBranchDetails(branchId);
+
+    if (!branchResult.success) {
+      return branchResult.response;
+    }
+
+    let body: CreateTagBody;
+
+    try {
+      body =
+        (await request.json()) as CreateTagBody;
+    } catch {
+      return errorResponse(
+        "Получены неправильные данные.",
+        400,
+      );
+    }
+
+    const rawUrl =
+      typeof body.googleReviewUrl ===
+      "string"
+        ? body.googleReviewUrl.trim()
+        : "";
+
+    const googleReviewUrl =
+      normalizeGoogleUrl(rawUrl);
+
+    if (!googleReviewUrl) {
+      return errorResponse(
+        "Введите правильную HTTPS-ссылку Google или Google Maps.",
+        400,
+      );
+    }
+
+    let createdTag:
+      | NfcTagRow
+      | null = null;
+
+    for (
+      let attempt = 0;
+      attempt < 5;
+      attempt += 1
+    ) {
+      const code = randomBytes(8).toString(
+        "base64url",
+      );
+
+      const {
+        data,
+        error,
+      } = await supabaseAdmin
+        .from("nfc_tags")
+        .insert({
+          branch_id: branchId,
+          code,
+          google_review_url:
+            googleReviewUrl,
+        })
+        .select(
+          "id, branch_id, code, google_review_url, created_at",
+        )
+        .single();
+
+      if (!error && data) {
+        createdTag =
+          data as NfcTagRow;
+        break;
+      }
+
+      if (error?.code === "23505") {
+        continue;
+      }
+
+      return errorResponse(
+        `Не удалось создать NFC-метку: ${
+          error?.message ??
+          "неизвестная ошибка"
+        }`,
+        500,
+      );
+    }
+
+    if (!createdTag) {
+      return errorResponse(
+        "Не удалось создать уникальный NFC-код.",
+        500,
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+
+        tag: {
+          id: createdTag.id,
+          code: createdTag.code,
+          googleReviewUrl:
+            createdTag.google_review_url,
+          publicPath:
+            `/t/${createdTag.code}`,
+          createdAt:
+            createdTag.created_at,
+          tapCount: 0,
+        },
+      },
+      noStoreOptions(201),
+    );
+  } catch (error) {
+    return errorResponse(
+      getErrorMessage(
+        error,
+        "Не удалось создать NFC-метку.",
+      ),
+      500,
+    );
+  }
 }
 
-async function getOwnedBranch(
+async function getBranchDetails(
   branchId: string,
-  userId: string,
 ): Promise<
   | {
       success: true;
@@ -223,7 +344,7 @@ async function getOwnedBranch(
     return {
       success: false,
       response: errorResponse(
-        `Не удалось проверить филиал: ${branchError.message}`,
+        `Не удалось загрузить филиал: ${branchError.message}`,
         500,
       ),
     };
@@ -250,19 +371,18 @@ async function getOwnedBranch(
     error: restaurantError,
   } = await supabaseAdmin
     .from("restaurants")
-    .select("id, owner_id, name")
+    .select("id, name, owner_id")
     .eq(
       "id",
       branch.restaurant_id,
     )
-    .eq("owner_id", userId)
     .maybeSingle();
 
   if (restaurantError) {
     return {
       success: false,
       response: errorResponse(
-        `Не удалось проверить ресторан: ${restaurantError.message}`,
+        `Не удалось загрузить ресторан: ${restaurantError.message}`,
         500,
       ),
     };
@@ -272,8 +392,8 @@ async function getOwnedBranch(
     return {
       success: false,
       response: errorResponse(
-        "Филиал принадлежит другому пользователю.",
-        403,
+        "Ресторан филиала не найден.",
+        404,
       ),
     };
   }
@@ -286,25 +406,34 @@ async function getOwnedBranch(
   };
 }
 
-async function requireUser(
+async function requireAdmin(
   request: NextRequest,
 ): Promise<
   | {
       success: true;
       userId: string;
+      role: string;
     }
   | {
       success: false;
       response: NextResponse;
     }
 > {
-  const token = getBearerToken(
+  const authorization =
     request.headers.get(
       "authorization",
-    ),
-  );
+    );
 
-  if (!token) {
+  const [scheme, token] =
+    authorization
+      ?.trim()
+      .split(/\s+/) ?? [];
+
+  if (
+    scheme?.toLowerCase() !==
+      "bearer" ||
+    !token
+  ) {
     return {
       success: false,
       response: errorResponse(
@@ -315,14 +444,17 @@ async function requireUser(
   }
 
   const {
-    data,
-    error,
+    data: userData,
+    error: userError,
   } =
     await supabaseAdmin.auth.getUser(
       token,
     );
 
-  if (error || !data.user) {
+  if (
+    userError ||
+    !userData.user
+  ) {
     return {
       success: false,
       response: errorResponse(
@@ -332,13 +464,49 @@ async function requireUser(
     };
   }
 
+  const {
+    data: adminData,
+    error: adminError,
+  } = await supabaseAdmin
+    .from("admin_users")
+    .select("role, is_active")
+    .eq(
+      "user_id",
+      userData.user.id,
+    )
+    .maybeSingle();
+
+  if (adminError) {
+    return {
+      success: false,
+      response: errorResponse(
+        `Не удалось проверить права администратора: ${adminError.message}`,
+        500,
+      ),
+    };
+  }
+
+  if (
+    !adminData ||
+    adminData.is_active !== true
+  ) {
+    return {
+      success: false,
+      response: errorResponse(
+        "Нет доступа к админ-панели.",
+        403,
+      ),
+    };
+  }
+
   return {
     success: true,
-    userId: data.user.id,
+    userId: userData.user.id,
+    role: adminData.role ?? "admin",
   };
 }
 
-function normalizeGoogleReviewUrl(
+function normalizeGoogleUrl(
   value: string,
 ) {
   if (!value) {
@@ -355,71 +523,43 @@ function normalizeGoogleReviewUrl(
     const hostname =
       url.hostname.toLowerCase();
 
-    const isGoogleDomain =
+    const allowed =
       /(^|\.)google\.[a-z.]+$/.test(
         hostname,
-      );
-
-    const isShortGoogleDomain =
+      ) ||
       hostname === "g.page" ||
       hostname.endsWith(".g.page") ||
       hostname === "goo.gl" ||
       hostname.endsWith(".goo.gl");
 
-    if (
-      !isGoogleDomain &&
-      !isShortGoogleDomain
-    ) {
-      return null;
-    }
-
-    return url.toString();
+    return allowed
+      ? url.toString()
+      : null;
   } catch {
     return null;
   }
-}
-
-function createTagCode() {
-  return randomBytes(8).toString(
-    "base64url",
-  );
-}
-
-function getBearerToken(
-  authorization: string | null,
-) {
-  if (!authorization) {
-    return null;
-  }
-
-  const [scheme, token] =
-    authorization
-      .trim()
-      .split(/\s+/);
-
-  if (
-    scheme?.toLowerCase() !==
-      "bearer" ||
-    !token
-  ) {
-    return null;
-  }
-
-  return token;
 }
 
 function getErrorMessage(
   error: unknown,
   fallback: string,
 ) {
-  if (
-    error instanceof Error &&
+  return error instanceof Error &&
     error.message.trim()
-  ) {
-    return error.message;
-  }
+    ? error.message
+    : fallback;
+}
 
-  return fallback;
+function noStoreOptions(
+  status: number,
+) {
+  return {
+    status,
+    headers: {
+      "Cache-Control":
+        "no-store, max-age=0",
+    },
+  };
 }
 
 function errorResponse(
@@ -431,11 +571,6 @@ function errorResponse(
       success: false,
       message,
     },
-    {
-      status,
-      headers: {
-        "Cache-Control": "no-store",
-      },
-    },
+    noStoreOptions(status),
   );
 }

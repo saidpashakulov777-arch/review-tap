@@ -161,7 +161,7 @@ export default function AdminRestaurantsPage() {
       }
 
       const response = await fetch(
-        "/api/admin/restaurants",
+        "/api/admin/restaurants/catalog",
         {
           method: "GET",
 
@@ -344,7 +344,21 @@ export default function AdminRestaurantsPage() {
             })}
           </nav>
         </div>
-      </header>
+      
+          <Link
+            href="/admin/restaurants/new"
+            className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-500"
+          >
+            + Создать ресторан
+          </Link>
+
+          <Link
+            href="/admin/restaurants/nfc"
+            className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-500"
+          >
+            + Создать NFC-ссылку
+          </Link>
+</header>
 
       <div className="relative mx-auto max-w-[1500px] px-5 py-8 sm:px-8">
         {message && (

@@ -390,6 +390,18 @@ export default function AdminCustomersPage() {
       return;
     }
 
+    const submitter =
+      (
+        event.nativeEvent as SubmitEvent
+      ).submitter;
+
+    const operation =
+      submitter instanceof
+        HTMLButtonElement &&
+      submitter.value === "extend"
+        ? "extend"
+        : "activate";
+
     if (
       !Number.isInteger(selectedDays) ||
       selectedDays < 1
@@ -428,7 +440,7 @@ export default function AdminCustomersPage() {
       }
 
       const response = await fetch(
-        "/api/admin/customers",
+        `/api/admin/customers?operation=${operation}`,
         {
           method: "POST",
 
@@ -1020,7 +1032,7 @@ function ActivationModal({
             </p>
 
             <h2 className="mt-2 text-2xl font-black">
-              Активировать тариф
+              Активировать или продлить тариф
             </h2>
 
             <p className="mt-2 break-all text-sm text-gray-400">
@@ -1176,10 +1188,11 @@ function ActivationModal({
             </p>
 
             <p className="mt-2 text-xs leading-5 text-amber-200/70">
-              После подтверждения клиент сразу
-              получит выбранный тариф. В базе
-              появится ручной платёж со статусом
-              paid.
+              «Активировать» начнёт новый период
+              от сегодняшней даты. «Продлить»
+              прибавит выбранные дни к текущей
+              дате окончания. В базе появится
+              ручной платёж со статусом paid.
             </p>
           </div>
 
@@ -1195,11 +1208,27 @@ function ActivationModal({
 
             <button
               type="submit"
+              name="operation"
+              value="extend"
+              disabled={activating}
+              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 py-3 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {activating
+                ? "Сохраняем..."
+                : `Продлить ${formatPlanName(
+                    selectedPlan,
+                  )}`}
+            </button>
+
+            <button
+              type="submit"
+              name="operation"
+              value="activate"
               disabled={activating}
               className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {activating
-                ? "Активируем..."
+                ? "Сохраняем..."
                 : `Активировать ${formatPlanName(
                     selectedPlan,
                   )}`}

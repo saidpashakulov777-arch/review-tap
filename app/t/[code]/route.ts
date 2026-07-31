@@ -23,6 +23,7 @@ type TagRow = {
   id: string;
   code: string;
   google_review_url: string;
+  is_active: boolean;
 };
 
 export async function GET(
@@ -46,7 +47,7 @@ export async function GET(
   } = await supabaseAdmin
     .from("nfc_tags")
     .select(
-      "id, code, google_review_url",
+      "id, code, google_review_url, is_active",
     )
     .eq("code", code)
     .maybeSingle();
@@ -70,6 +71,18 @@ export async function GET(
   }
 
   const tag = data as TagRow;
+
+  if (!tag.is_active) {
+    return new NextResponse(
+      "NFC-ссылка отключена.",
+      {
+        status: 410,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
 
   const targetUrl =
     validateRedirectUrl(

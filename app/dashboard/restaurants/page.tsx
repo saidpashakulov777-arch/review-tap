@@ -91,7 +91,7 @@ export default function RestaurantsPage() {
       }
 
       const response = await fetch(
-        "/api/restaurants",
+        "/api/dashboard/my-restaurants",
         {
           method: "GET",
 
@@ -300,7 +300,7 @@ export default function RestaurantsPage() {
           </div>
         )}
 
-        <section className="mt-8 rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
+        <section hidden className="mt-8 rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
           <h2 className="text-xl font-bold">
             Добавить ресторан
           </h2>

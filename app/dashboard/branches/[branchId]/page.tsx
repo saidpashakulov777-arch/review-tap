@@ -356,19 +356,17 @@ export default function BranchNfcPage() {
 
         <section className="mt-8 rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
           <h2 className="text-xl font-bold">
-            Создать NFC-ссылку
+            NFC-метки филиала
           </h2>
 
           <p className="mt-2 text-sm leading-6 text-gray-500">
-            Вставьте ссылку Google для
-            публикации отзыва. В
-            физическую NFC-карту будет
-            записываться ссылка
-            ReviewTap, а не сама
-            Google-ссылка.
+            NFC-метки создаёт и настраивает
+            администратор ReviewTap. Здесь
+            доступны готовые ссылки и
+            статистика переходов.
           </p>
 
-          <form
+          <form hidden
             onSubmit={handleCreateTag}
             className="mt-5 flex flex-col gap-3 lg:flex-row"
           >

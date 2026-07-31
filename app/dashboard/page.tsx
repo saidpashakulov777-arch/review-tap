@@ -38,18 +38,71 @@ export default function RestaurantsPage() {
           return;
         }
 
-        const { data, error } = await supabase
-          .from("restaurants")
-          .select("id, owner_id, name, created_at")
-          .eq("owner_id", user.id)
-          .order("created_at", { ascending: false });
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-        if (error) {
-          throw error;
+        if (
+          sessionError ||
+          !session?.access_token
+        ) {
+          router.replace("/login");
+          return;
         }
 
+        const response = await fetch(
+          "/api/dashboard/my-restaurants",
+          {
+            method: "GET",
+
+            headers: {
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+
+            cache: "no-store",
+          }
+        );
+
+        const result = (await response.json()) as {
+          success?: boolean;
+
+          restaurants?: Array<{
+            id: string;
+            name: string;
+            createdAt: string | null;
+            branchCount?: number;
+          }>;
+
+          message?: string;
+        };
+
+        if (
+          !response.ok ||
+          !result.success
+        ) {
+          throw new Error(
+            result.message ||
+              "Не удалось загрузить рестораны."
+          );
+        }
+
+        const normalizedRestaurants: Restaurant[] =
+          (result.restaurants ?? []).map(
+            (restaurant) => ({
+              id: restaurant.id,
+              owner_id: user.id,
+              name: restaurant.name,
+              created_at:
+                restaurant.createdAt,
+            })
+          );
+
         if (mounted) {
-          setRestaurants(data ?? []);
+          setRestaurants(
+            normalizedRestaurants
+          );
         }
       } catch (error) {
         console.error("Ошибка загрузки ресторанов:", error);

@@ -330,7 +330,7 @@ export default function RestaurantBranchesPage() {
           </div>
         )}
 
-        <section className="mt-8 rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
+        <section hidden className="mt-8 rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
           <h2 className="text-xl font-bold">
             Добавить филиал
           </h2>
@@ -444,7 +444,7 @@ function BranchCard({
         href={`/dashboard/branches/${branch.id}`}
         className="mt-5 flex w-full items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
       >
-        Настроить NFC-метки
+        Посмотреть NFC и статистику
       </Link>
     </article>
   );

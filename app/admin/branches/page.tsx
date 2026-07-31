@@ -294,7 +294,14 @@ export default function AdminBranchesPage() {
             ))}
           </nav>
         </div>
-      </header>
+      
+          <Link
+            href="/admin/branches/new"
+            className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-500"
+          >
+            + Создать филиал
+          </Link>
+</header>
 
       <div className="mx-auto max-w-[1500px] px-5 py-8 sm:px-8">
         {errorMessage && (
@@ -547,6 +554,13 @@ function BranchRow({
             ? "Активен"
             : "Отключён"}
         </span>
+
+        <Link
+          href={`/admin/branches/${branch.id}`}
+          className="mt-3 block text-xs font-semibold text-blue-400 hover:text-blue-300"
+        >
+          Управлять NFC →
+        </Link>
 
         {branch.googleReviewUrl && (
           <a

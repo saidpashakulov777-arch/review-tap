@@ -458,6 +458,13 @@ export async function POST(
     return adminAuth.response;
   }
 
+  const operation =
+    request.nextUrl.searchParams.get(
+      "operation",
+    ) === "extend"
+      ? "extend"
+      : "activate";
+
   try {
     const body =
       await readActivateBody(request);
@@ -548,7 +555,9 @@ export async function POST(
 
     const { data, error } =
       await supabaseAdmin.rpc(
-        "reviewtap_admin_activate_subscription",
+        operation === "extend"
+          ? "reviewtap_admin_extend_subscription"
+          : "reviewtap_admin_activate_subscription",
         {
           p_admin_user_id:
             adminAuth.userId,
@@ -595,7 +604,9 @@ export async function POST(
         success: true,
 
         message:
-          "Подписка успешно активирована.",
+          operation === "extend"
+            ? "Подписка успешно продлена."
+            : "Подписка успешно активирована.",
 
         customer: {
           id: customerData.user.id,
@@ -631,7 +642,9 @@ export async function POST(
       "INTERNAL_SERVER_ERROR",
       getErrorMessage(
         error,
-        "Не удалось активировать подписку.",
+        operation === "extend"
+          ? "Не удалось продлить подписку."
+          : "Не удалось активировать подписку.",
       ),
       500,
     );

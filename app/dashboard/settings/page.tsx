@@ -211,20 +211,134 @@ export default function SettingsPage() {
   }, [router]);
 
   const planName = useMemo(() => {
-    if (!subscription?.plan) {
+    if (!subscription) {
       return "Не подключён";
     }
 
-    return formatPlanName(subscription.plan);
+    const normalizedStatus =
+      subscription.status
+        ?.trim()
+        .toLowerCase() ?? "";
+
+    if (
+      normalizedStatus ===
+      "trialing"
+    ) {
+      return "Trial";
+    }
+
+    if (!subscription.plan) {
+      return "Не подключён";
+    }
+
+    return formatPlanName(
+      subscription.plan,
+    );
   }, [subscription]);
 
   const subscriptionStatus = useMemo(() => {
-    if (!subscription?.status) {
+    if (!subscription) {
       return "Неактивна";
     }
 
+    const normalizedStatus =
+      subscription.status
+        ?.trim()
+        .toLowerCase() ?? "";
+
+    const now = Date.now();
+
+    if (
+      normalizedStatus ===
+      "trialing"
+    ) {
+      const trialEnd =
+        subscription.trial_ends_at
+          ? new Date(
+              subscription.trial_ends_at,
+            ).getTime()
+          : Number.NaN;
+
+      if (
+        !Number.isFinite(trialEnd)
+      ) {
+        return "Trial активен";
+      }
+
+      if (trialEnd <= now) {
+        return "Пробный период закончился";
+      }
+
+      const daysLeft = Math.max(
+        1,
+        Math.ceil(
+          (trialEnd - now) /
+            (1000 * 60 * 60 * 24),
+        ),
+      );
+
+      return `Активна — осталось ${daysLeft} дн.`;
+    }
+
+    if (
+      normalizedStatus ===
+      "active"
+    ) {
+      const periodEnd =
+        subscription.current_period_end
+          ? new Date(
+              subscription.current_period_end,
+            ).getTime()
+          : Number.NaN;
+
+      if (
+        !subscription
+          .current_period_end ||
+        !Number.isFinite(periodEnd)
+      ) {
+        return "Активна";
+      }
+
+      if (periodEnd <= now) {
+        return "Срок подписки закончился";
+      }
+
+      const daysLeft = Math.max(
+        1,
+        Math.ceil(
+          (periodEnd - now) /
+            (1000 * 60 * 60 * 24),
+        ),
+      );
+
+      return `Активна — осталось ${daysLeft} дн.`;
+    }
+
+    if (
+      normalizedStatus ===
+      "past_due"
+    ) {
+      return "Оплата просрочена";
+    }
+
+    if (
+      normalizedStatus ===
+      "cancelled"
+    ) {
+      return "Отменена";
+    }
+
+    if (
+      normalizedStatus ===
+      "expired"
+    ) {
+      return "Срок подписки закончился";
+    }
+
     return formatSubscriptionStatus(
-      subscription.status,
+      normalizedStatus ||
+        subscription.status ||
+        "inactive",
     );
   }, [subscription]);
 
