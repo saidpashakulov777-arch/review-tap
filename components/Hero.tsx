@@ -26,9 +26,12 @@ export default function Hero() {
           </p>
 
           <div className="mt-10 flex flex-wrap gap-4">
-            <button className="rounded-xl bg-blue-600 px-7 py-4 font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-500">
-              Попробовать бесплатно
-            </button>
+            <a
+  href="/register"
+  className="rounded-xl bg-blue-600 px-7 py-4 font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-500"
+>
+  Попробовать бесплатно
+</a>
 
             <button className="rounded-xl border border-white/15 bg-white/5 px-7 py-4 font-semibold text-white transition hover:bg-white/10">
               Смотреть демо
