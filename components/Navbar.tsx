@@ -49,9 +49,12 @@ export default function Navbar() {
           </a>
         </nav>
 
-        <button className="rounded-xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/10">
-          Войти
-        </button>
+        <a
+  href="/login"
+  className="rounded-xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/10"
+>
+  Войти
+</a>
       </div>
     </header>
   );
