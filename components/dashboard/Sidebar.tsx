@@ -21,11 +21,6 @@ const navigation = [
     href: "/dashboard/branches",
   },
   {
-    name: "NFC-стенды",
-    icon: "◉",
-    href: "/dashboard/nfc",
-  },
-  {
     name: "Аналитика",
     icon: "⌁",
     href: "/dashboard/analytics",
